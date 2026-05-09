@@ -24,6 +24,7 @@ import net.Zrips.CMILib.Version.Version;
 import net.Zrips.CMILib.Version.PaperMethods.PaperLib;
 import net.Zrips.CMILib.Version.Schedulers.CMIScheduler;
 import net.Zrips.CMILib.Version.Schedulers.CMITask;
+import net.Zrips.CMILib.TitleMessages.CMITitleMessage;
 
 public class RandomTp {
 
@@ -380,9 +381,19 @@ public class RandomTp {
         if (tpDelayRecord.getTeleportTask() != null)
             tpDelayRecord.getTeleportTask().cancel();
 
+        tpDelayRecord.setStartLocation(targetPlayer.getLocation().clone());
+
         CMITask task = CMIScheduler.runAtLocationLater(plugin, loc, () -> {
             if (!Teleporting.isUnderTeleportDelay(targetPlayer.getUniqueId()) && plugin.getConfigManager().getTeleportDelay() > 0)
                 return;
+
+            if (tpDelayRecord.hasMoved(targetPlayer.getLocation())) {
+                Teleporting.cancelTeleportDelay(targetPlayer.getUniqueId());
+                lm.General_TeleportCanceled.sendMessage(targetPlayer);
+                if (plugin.getConfigManager().isTeleportTitleMessage())
+                    CMITitleMessage.send(targetPlayer, "", "");
+                return;
+            }
 
             Teleporting.cancelTeleportDelay(targetPlayer.getUniqueId());
 

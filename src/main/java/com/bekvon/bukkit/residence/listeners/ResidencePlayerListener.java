@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -48,7 +50,6 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerLoginEvent;
-import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
@@ -56,7 +57,6 @@ import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
 import org.bukkit.event.player.PlayerToggleFlightEvent;
-import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -116,9 +116,11 @@ import net.Zrips.CMILib.Version.Schedulers.CMIScheduler;
 
 public class ResidencePlayerListener implements Listener {
 
-    private Residence plugin;
+    private final Residence plugin;
 
-    private PlayerLocationChecker locationChecker = new PlayerLocationChecker();
+    private final PlayerLocationChecker locationChecker = new PlayerLocationChecker();
+
+    private final ConcurrentHashMap<ClaimedResidence, Set<UUID>> playersInResidence = new ConcurrentHashMap<>();
 
     private final static String ResidenceFlyState = "ResidenceFlyState";
 
@@ -132,30 +134,47 @@ public class ResidencePlayerListener implements Listener {
 
     public void reload() {
         playerTempData.clear();
+        playersInResidence.clear();
     }
 
-    @EventHandler
-    public void onJump(PlayerMoveEvent event) {
+    public Set<UUID> getPlayersInResidenceCache(ClaimedResidence res) {
+        Set<UUID> existing = playersInResidence.get(res);
+        return existing == null ? new HashSet<>() : existing;
+    }
 
-        if (!Flags.jump3.isGlobalyEnabled() && !Flags.jump2.isGlobalyEnabled())
-            return;
+    public void updatePlayerResidence(UUID uuid, ClaimedResidence oldRes, ClaimedResidence newRes) {
+        if (oldRes != null) {
+            Set<UUID> set = playersInResidence.get(oldRes);
+            if (set != null) {
+                set.remove(uuid);
+                if (set.isEmpty())
+                    playersInResidence.remove(oldRes);
+            }
+        }
+        if (newRes != null) {
+            playersInResidence.computeIfAbsent(newRes, k -> ConcurrentHashMap.newKeySet()).add(uuid);
+        }
+    }
 
-        Player player = event.getPlayer();
-        if (player.isFlying())
-            return;
+    public void removePlayerFromResidenceCache(UUID uuid) {
+        playerTempData tempData = playerTempData.get(uuid);
+        ClaimedResidence current = tempData == null ? null : tempData.getCurrentResidence();
+        if (current != null) {
+            Set<UUID> set = playersInResidence.get(current);
+            if (set != null) {
+                set.remove(uuid);
+                if (set.isEmpty())
+                    playersInResidence.remove(current);
+            }
+        }
+    }
 
-        if (event.getTo().getY() - event.getFrom().getY() != 0.41999998688697815D)
-            return;
+    public void clearResidenceCache(ClaimedResidence res) {
+        playersInResidence.remove(res);
+    }
 
-        if (player.hasMetadata("NPC"))
-            return;
-
-        FlagPermissions perms = FlagPermissions.getPerms(player.getLocation());
-        if (Flags.jump2.isGlobalyEnabled() && perms.has(Flags.jump2, FlagCombo.OnlyTrue))
-            player.setVelocity(player.getVelocity().add(player.getVelocity().multiply(0.3)));
-        else if (Flags.jump3.isGlobalyEnabled() && perms.has(Flags.jump3, FlagCombo.OnlyTrue))
-            player.setVelocity(player.getVelocity().add(player.getVelocity().multiply(0.6)));
-
+    public void stopLocationChecker() {
+        locationChecker.stop();
     }
 
     @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -457,6 +476,8 @@ public class ResidencePlayerListener implements Listener {
         plugin.getPermissionManager().removeFromCache(player);
 
         checkSpecialFlags(player, plugin.getResidenceManager().getByLoc(player.getLocation()), playerTempData.getCurrentResidence(player.getUniqueId()));
+
+        removePlayerFromResidenceCache(player.getUniqueId());
 
         plugin.getPlayerManager().getResidencePlayer(player).onQuit();
         plugin.getTeleportMap().remove(player.getUniqueId());
@@ -2158,99 +2179,6 @@ public class ResidencePlayerListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    public void onPlayerMove(PlayerMoveEvent event) {
-        // disabling event on world
-        if (plugin.isDisabledWorldListener(event.getPlayer().getWorld()))
-            return;
-        Player player = event.getPlayer();
-        if (player == null)
-            return;
-
-        if (player.hasMetadata("NPC"))
-            return;
-
-        Location locfrom = event.getFrom();
-        Location locto = event.getTo();
-        if (locfrom.getBlockX() == locto.getBlockX() && locfrom.getBlockY() == locto.getBlockY() && locfrom.getBlockZ() == locto.getBlockZ())
-            return;
-
-//		long last = playerTempData.get(player).getLastUpdate();
-//		if (System.currentTimeMillis() - last < plugin.getConfigManager().getMinMoveUpdateInterval())
-//			return;
-//
-//		playerTempData.get(player).setLastUpdate(System.currentTimeMillis());
-
-        boolean handled = handleNewLocation(player, locto, true);
-
-        if (!handled)
-            event.setCancelled(true);
-
-        if (Teleporting.getTeleportDelayMap().isEmpty())
-            return;
-
-        if (plugin.getConfigManager().getTeleportDelay() <= 0 || !Teleporting.isUnderTeleportDelay(player.getUniqueId()))
-            return;
-
-        Teleporting.cancelTeleportDelay(player.getUniqueId());
-
-        lm.General_TeleportCanceled.sendMessage(player);
-        if (plugin.getConfigManager().isTeleportTitleMessage())
-            CMITitleMessage.send(player, "", "");
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onPlayerMoveInVehicle(VehicleMoveEvent event) {
-
-        // disabling event on world
-        if (plugin.isDisabledWorldListener(event.getVehicle().getWorld()))
-            return;
-
-        List<Entity> ent = Utils.getPassengers(event.getVehicle());
-
-        if (ent.isEmpty())
-            return;
-
-        for (Entity one : ent) {
-
-            if (!(one instanceof Player))
-                continue;
-
-            Player player = (Player) one;
-
-            if (player == null)
-                continue;
-
-            if (player.hasMetadata("NPC"))
-                continue;
-
-            Location locfrom = event.getFrom();
-            Location locto = event.getTo();
-            if (locfrom.getBlockX() == locto.getBlockX() && locfrom.getBlockY() == locto.getBlockY() && locfrom.getBlockZ() == locto.getBlockZ())
-                continue;
-
-            long last = playerTempData.get(player).getLastCheck();
-            if (System.currentTimeMillis() - last < plugin.getConfigManager().getMinMoveUpdateInterval())
-                continue;
-
-            boolean handled = handleNewLocation(player, locto, true);
-            if (!handled) {
-                Teleporting.teleport(event.getVehicle(), event.getFrom());
-            }
-
-            if (Teleporting.getTeleportDelayMap().isEmpty())
-                continue;
-
-            if (plugin.getConfigManager().getTeleportDelay() <= 0 || !Teleporting.isUnderTeleportDelay(player.getUniqueId()))
-                continue;
-
-            Teleporting.cancelTeleportDelay(player.getUniqueId());
-            lm.General_TeleportCanceled.sendMessage(player);
-            if (plugin.getConfigManager().isTeleportTitleMessage())
-                CMITitleMessage.send(player, "", "");
-        }
-    }
-
     @EventHandler(priority = EventPriority.NORMAL)
     public void PlayerToggleFlightEvent(PlayerToggleFlightEvent event) {
 
@@ -2347,6 +2275,15 @@ public class ResidencePlayerListener implements Listener {
             return true;
         }
 
+        if (move && !Teleporting.getTeleportDelayMap().isEmpty()) {
+            if (plugin.getConfigManager().getTeleportDelay() > 0 && Teleporting.isUnderTeleportDelay(player.getUniqueId())) {
+                Teleporting.cancelTeleportDelay(player.getUniqueId());
+                lm.General_TeleportCanceled.sendMessage(player);
+                if (plugin.getConfigManager().isTeleportTitleMessage())
+                    CMITitleMessage.send(player, "", "");
+            }
+        }
+
         ClaimedResidence res = plugin.getResidenceManager().getByLoc(loc);
 
         UUID uuid = player.getUniqueId();
@@ -2369,6 +2306,8 @@ public class ResidencePlayerListener implements Listener {
                 tempData.setLastInsideLoc(loc);
             return true;
         }
+
+        updatePlayerResidence(uuid, resOld, res);
 
         if (res == null) {
             tempData.setCurrentResidence(player, res);
@@ -2625,32 +2564,27 @@ public class ResidencePlayerListener implements Listener {
             return;
 
         try {
+            Set<ClaimedResidence> residences = new HashSet<>();
 
-            Set<ClaimedResidence> residences = new HashSet<ClaimedResidence>();
-
-            for (Player player : Bukkit.getServer().getOnlinePlayers()) {
-                ClaimedResidence res = getCurrentResidence(player.getUniqueId());
-                if (res == null)
-                    continue;
+            for (Entry<ClaimedResidence, Set<UUID>> entry : playersInResidence.entrySet()) {
+                ClaimedResidence res = entry.getKey();
                 if (!res.getPermissions().has(Flags.nomobs, false)) {
                     for (ClaimedResidence sub : res.getSubzonesMap().values()) {
-                        if (!sub.getPermissions().has(Flags.nomobs, false)) {
-                            continue;
-                        }
-                        residences.add(sub);
+                        if (sub.getPermissions().has(Flags.nomobs, false))
+                            residences.add(sub);
                     }
                     continue;
                 }
                 residences.add(res);
             }
 
-            int chunkRadius = 3;
+            if (residences.isEmpty())
+                return;
+
             int range = 3 * 16;
+
             for (ClaimedResidence res : residences) {
-                Set<Entity> entities = new HashSet<Entity>();
-
                 World world = Bukkit.getWorld(res.getWorld());
-
                 if (world == null)
                     continue;
 
@@ -2659,31 +2593,29 @@ public class ResidencePlayerListener implements Listener {
                     continue;
                 }
 
+                Set<Entity> entities = new HashSet<>();
                 for (CuboidArea area : res.getAreaMap().values()) {
                     for (ChunkRef chunk : area.getChunks()) {
-
-                        // Checking if chunk is near a player.
-                        // In case residence is extremely big it will check all chunks which can cause
-                        // performance issues
                         boolean near = false;
-                        for (Player player : res.getPlayersInResidence()) {
-                            int x = player.getLocation().getChunk().getX();
-                            int z = player.getLocation().getChunk().getZ();
-
-                            if (CMINumber.abs(x - chunk.getX()) > chunkRadius)
-                                continue;
-
-                            if (CMINumber.abs(z - chunk.getZ()) > chunkRadius)
-                                continue;
-                            near = true;
-                            break;
+                        Set<UUID> playerUUIDs = playersInResidence.get(res);
+                        if (playerUUIDs != null) {
+                            for (UUID uuid : playerUUIDs) {
+                                Player player = Bukkit.getPlayer(uuid);
+                                if (player == null || !player.isOnline())
+                                    continue;
+                                int x = player.getLocation().getChunk().getX();
+                                int z = player.getLocation().getChunk().getZ();
+                                if (CMINumber.abs(x - chunk.getX()) <= 3 && CMINumber.abs(z - chunk.getZ()) <= 3) {
+                                    near = true;
+                                    break;
+                                }
+                            }
                         }
                         if (!near)
                             continue;
                         entities.addAll(Arrays.asList(world.getChunkAt(chunk.getX(), chunk.getZ()).getEntities()));
                     }
                 }
-
                 processEntities(entities, res);
             }
         } catch (Exception ex) {
