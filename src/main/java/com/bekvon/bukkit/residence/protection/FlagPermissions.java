@@ -495,7 +495,15 @@ public class FlagPermissions {
         if (name == null)
             return flags;
 
-        Map<String, Boolean> namedFlags = playerFlagsByName.get(name);
+        Map<String, Boolean> namedFlags = null;
+        String matchedName = null;
+        for (Entry<String, Map<String, Boolean>> entry : playerFlagsByName.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(name)) {
+                namedFlags = entry.getValue();
+                matchedName = entry.getKey();
+                break;
+            }
+        }
 
         if (namedFlags == null)
             return flags;
@@ -506,7 +514,7 @@ public class FlagPermissions {
         flags.putAll(namedFlags);
 
         getPlayerFlags().computeIfAbsent(uuid, k -> new HashMap<String, Boolean>()).putAll(namedFlags);
-        playerFlagsByName.remove(name);
+        playerFlagsByName.remove(matchedName);
 
         return flags;
     }
@@ -1022,7 +1030,7 @@ public class FlagPermissions {
         for (String keyset : playerFlagsByName.keySet()) {
             if (keyset.length() != 36) {
                 UUID uuid = null;
-                if (ownerName == null || !ownerName.equals(keyset) || PlayerManager.isTempUUID(ownerUUID))
+                if (ownerName == null || !ownerName.equalsIgnoreCase(keyset) || PlayerManager.isTempUUID(ownerUUID))
                     uuid = ResidencePlayer.getUUID(keyset);
 
                 if (uuid != null && !PlayerManager.isTempUUID(uuid))
