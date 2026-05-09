@@ -436,20 +436,22 @@ public class ResidencePlayerListener implements Listener {
             return;
 
         ClaimedResidence res = event.getResidence();
+        if (res == null)
+            return;
         if (res.getPermissions().has(Flags.wspeed1, FlagCombo.OnlyTrue) || res.getPermissions().has(Flags.wspeed2, FlagCombo.OnlyTrue))
-            for (Player one : event.getResidence().getPlayersInResidence())
+            for (Player one : res.getPlayersInResidence())
                 one.setWalkSpeed(0.2F);
 
         if (res.getPermissions().has(Flags.sun, FlagCombo.OnlyTrue) || res.getPermissions().has(Flags.rain, FlagCombo.OnlyTrue))
-            for (Player one : event.getResidence().getPlayersInResidence())
+            for (Player one : res.getPlayersInResidence())
                 one.resetPlayerWeather();
 
         if (res.getPermissions().has(Flags.fly, FlagCombo.OnlyTrue))
-            for (Player one : event.getResidence().getPlayersInResidence())
-                fly(one, false, event.getResidence());
+            for (Player one : res.getPlayersInResidence())
+                fly(one, false, res);
 
         if (res.getPermissions().has(Flags.glow, FlagCombo.OnlyTrue) && Version.isCurrentEqualOrHigher(Version.v1_9_R1))
-            for (Player one : event.getResidence().getPlayersInResidence())
+            for (Player one : res.getPlayersInResidence())
                 one.setGlowing(false);
     }
 

@@ -12,7 +12,6 @@ import com.bekvon.bukkit.residence.Residence;
 import com.bekvon.bukkit.residence.containers.ResidencePlayer;
 import com.bekvon.bukkit.residence.containers.lm;
 import com.bekvon.bukkit.residence.economy.EconomyInterface;
-import com.bekvon.bukkit.residence.event.ResidenceDeleteEvent;
 import com.bekvon.bukkit.residence.event.ResidenceDeleteEvent.DeleteCause;
 import com.bekvon.bukkit.residence.permissions.PermissionGroup;
 import com.bekvon.bukkit.residence.utils.GetTime;
@@ -220,14 +219,9 @@ public class LeaseManager {
             }
             if (!renewed) {
                 if (!plugin.getConfigManager().enabledRentSystem() || !plugin.getRentManager().isRented(resname)) {
-                    ResidenceDeleteEvent resevent = new ResidenceDeleteEvent(null, res, DeleteCause.LEASE_EXPIRE);
-                    plugin.getServ().getPluginManager().callEvent(resevent);
-                    if (!resevent.isCancelled()) {
-                        manager.removeResidence(res);
-                        leaseExpireTime.remove(res);
-                        if (plugin.getConfigManager().debugEnabled())
-                            System.out.println("Lease NOT removed, Removing: " + resname);
-                    }
+                    manager.removeResidence(res, DeleteCause.LEASE_EXPIRE);
+                    if (plugin.getConfigManager().debugEnabled())
+                        System.out.println("Lease NOT removed, Removing: " + resname);
                 }
             } else {
                 if (plugin.getConfigManager().enableEconomy() && plugin.getConfigManager().enableLeaseMoneyAccount()) {

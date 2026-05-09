@@ -604,6 +604,10 @@ public class ResidenceManager implements ResidenceInterface {
         this.removeResidence(null, res, true, false);
     }
 
+    public void removeResidence(ClaimedResidence res, DeleteCause cause) {
+        this.removeResidence(null, res, true, false, cause);
+    }
+
     @Deprecated
     public void removeResidence(String name) {
         this.removeResidence(null, name, true);
@@ -643,6 +647,10 @@ public class ResidenceManager implements ResidenceInterface {
     }
 
     public void removeResidence(ResidencePlayer rPlayer, ClaimedResidence res, boolean resadmin, boolean regenerate) {
+        removeResidence(rPlayer, res, resadmin, regenerate, null);
+    }
+
+    private void removeResidence(ResidencePlayer rPlayer, ClaimedResidence res, boolean resadmin, boolean regenerate, DeleteCause overrideCause) {
 
         Player player = null;
         if (rPlayer != null)
@@ -677,7 +685,8 @@ public class ResidenceManager implements ResidenceInterface {
         if (rPlayer != null)
             rPlayer.forceUpdateGroup();
 
-        ResidenceDeleteEvent resevent = new ResidenceDeleteEvent(player, res, rPlayer == null ? DeleteCause.OTHER : DeleteCause.PLAYER_DELETE);
+        ResidenceDeleteEvent resevent = new ResidenceDeleteEvent(player, res,
+                overrideCause != null ? overrideCause : (rPlayer == null ? DeleteCause.OTHER : DeleteCause.PLAYER_DELETE));
         plugin.getServ().getPluginManager().callEvent(resevent);
         if (resevent.isCancelled())
             return;
@@ -1686,6 +1695,8 @@ public class ResidenceManager implements ResidenceInterface {
             if (ress == null)
                 continue;
             ress.remove(res);
+            if (ress.isEmpty())
+                worldChunks.remove(chunk);
         }
     }
 
