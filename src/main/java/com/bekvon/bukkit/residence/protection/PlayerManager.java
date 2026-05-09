@@ -148,7 +148,7 @@ public class PlayerManager implements ResidencePlayerInterface {
 
                     byTempUUID.setUniqueId(to);
 
-                    playersByUUID.put(from, byTempUUID);
+                    playersByUUID.put(to, byTempUUID);
 
                     if (!byName.equals(byTempUUID)) {
                         playersByName.remove(name.toLowerCase());
