@@ -1323,12 +1323,23 @@ public class ClaimedResidence {
         if (tpDelayRecord.getTeleportTask() != null)
             tpDelayRecord.getTeleportTask().cancel();
 
+        tpDelayRecord.setStartLocation(targetPlayer.getLocation().clone());
+
         tpDelayRecord.setTeleportTask(CMIScheduler.runAtLocationLater(Residence.getInstance(), targloc, () -> {
             if (!targetPlayer.isOnline())
                 return;
 
             if (!Teleporting.isUnderTeleportDelay(targetPlayer.getUniqueId()) && Residence.getInstance().getConfigManager().getTeleportDelay() > 0)
                 return;
+
+            if (tpDelayRecord.hasMoved(targetPlayer.getLocation())) {
+                Teleporting.cancelTeleportDelay(targetPlayer.getUniqueId());
+                lm.General_TeleportCanceled.sendMessage(targetPlayer);
+                if (Residence.getInstance().getConfigManager().isTeleportTitleMessage())
+                    CMITitleMessage.send(targetPlayer, "", "");
+                return;
+            }
+
             Teleporting.cancelTeleportDelay(targetPlayer.getUniqueId());
 
             targetPlayer.closeInventory();
@@ -2014,8 +2025,10 @@ public class ClaimedResidence {
 
     public ArrayList<Player> getPlayersInResidence() {
         ArrayList<Player> within = new ArrayList<>();
-        for (Player player : Bukkit.getServer().getOnlinePlayers()) {
-            if (this.containsLoc(player.getLocation())) {
+        Set<UUID> cached = Residence.getInstance().getPlayerListener().getPlayersInResidenceCache(this);
+        for (UUID uuid : cached) {
+            Player player = Bukkit.getPlayer(uuid);
+            if (player != null && player.isOnline()) {
                 within.add(player);
             }
         }

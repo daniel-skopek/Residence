@@ -1,11 +1,14 @@
 package com.bekvon.bukkit.residence.containers;
 
+import org.bukkit.Location;
+
 import net.Zrips.CMILib.Version.Schedulers.CMITask;
 
 public class DelayTeleport {
     private CMITask messageTask = null;
     private CMITask teleportTask = null;
     private int remainingTime = 0;
+    private Location startLocation = null;
 
     public DelayTeleport() {
     }
@@ -41,5 +44,27 @@ public class DelayTeleport {
 
     public void setTeleportTask(CMITask teleportTask) {
         this.teleportTask = teleportTask;
+    }
+
+    public Location getStartLocation() {
+        return startLocation;
+    }
+
+    public void setStartLocation(Location startLocation) {
+        this.startLocation = startLocation;
+    }
+
+    public boolean hasMoved(Location current) {
+        if (startLocation == null || current == null)
+            return false;
+        if (!startLocation.getWorld().equals(current.getWorld()))
+            return true;
+        if (startLocation.getBlockX() != current.getBlockX())
+            return true;
+        if (startLocation.getBlockY() != current.getBlockY())
+            return true;
+        if (startLocation.getBlockZ() != current.getBlockZ())
+            return true;
+        return false;
     }
 }

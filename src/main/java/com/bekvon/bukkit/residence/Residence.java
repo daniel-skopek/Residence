@@ -355,6 +355,7 @@ public class Residence extends JavaPlugin {
             }
 
             getPlayerManager().onPluginStop();
+            getPlayerListener().stopLocationChecker();
 
             lm.consoleMessage("Disabled!");
         }

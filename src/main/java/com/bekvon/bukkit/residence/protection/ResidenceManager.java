@@ -1643,6 +1643,7 @@ public class ResidenceManager implements ResidenceInterface {
         plugin.getTransactionManager().removeFromSale(res, removeSigns);
 
         res.setMainResidence(false);
+        plugin.getPlayerListener().clearResidenceCache(res);
 
         giveBackOwnerMoneyForResidence(res);
 
